@@ -50,7 +50,7 @@ export default function ChatInterface() {
         aiResponse =
           "我能感受到你的心情。每一天的感受都很珍贵，要不要把今天的经历记录下来呢？你可以点击下面的按钮生成今日日记哦～"
       } else {
-        aiResponse = "我一直在这里陪伴你，有什么想聊的都可以告诉我～"
+        aiResponse = "我一直在这里陪伴你，有什么想聊的都可以告诉我哦～"
       }
 
       const newAiMessage: Message = { id: (Date.now() + 1).toString(), role: "assistant", content: aiResponse }
