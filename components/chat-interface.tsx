@@ -6,25 +6,20 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { MessageCircle, Edit3, Send } from "lucide-react"
 import DiaryEditModal from "./diary-edit-modal"
-import { useChatMessages } from "@/hooks/useChatMessages"
-import { useDiaries } from "@/hooks/useDiaries"
 
 interface Message {
   id: string
   role: "user" | "assistant"
   content: string
-  created_at: string
 }
 
 export default function ChatInterface() {
   const [input, setInput] = useState("")
+  const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [showDiaryModal, setShowDiaryModal] = useState(false)
   const [generatedDiary, setGeneratedDiary] = useState("")
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  
-  const { messages, addMessage } = useChatMessages()
-  const { addDiary } = useDiaries()
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -37,17 +32,14 @@ export default function ChatInterface() {
   const shouldShowGenerate = messages.filter((msg) => msg.role === "user").length >= 3
 
   const handleSendMessage = async (userMessage: string) => {
-    if (!userMessage.trim()) return
-
-    setIsLoading(true)
-    
-    // 添加用户消息到数据库
-    await addMessage("user", userMessage.trim())
+    const newUserMessage: Message = { id: Date.now().toString(), role: "user", content: userMessage }
+    setMessages((prevMessages) => [...prevMessages, newUserMessage])
     setInput("")
+    setIsLoading(true)
 
     // 模拟AI回复
-    setTimeout(async () => {
-      const userMessageCount = messages.filter((msg) => msg.role === "user").length + 1
+    setTimeout(() => {
+      const userMessageCount = messages.filter((msg) => msg.role === "user").length + 1 // +1 for current message
       let aiResponse = ""
 
       if (userMessageCount === 1) {
@@ -61,10 +53,10 @@ export default function ChatInterface() {
         aiResponse = "我一直在这里陪伴你，有什么想聊的都可以告诉我哦～"
       }
 
-      // 添加AI回复到数据库
-      await addMessage("assistant", aiResponse)
+      const newAiMessage: Message = { id: (Date.now() + 1).toString(), role: "assistant", content: aiResponse }
+      setMessages((prevMessages) => [...prevMessages, newAiMessage])
       setIsLoading(false)
-    }, 1000)
+    }, 1000) // 模拟AI思考时间
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -73,7 +65,7 @@ export default function ChatInterface() {
     handleSendMessage(input.trim())
   }
 
-  const handleGenerateDiary = async () => {
+  const handleGenerateDiary = () => {
     if (messages.length === 0) {
       alert("请先与AI聊天，然后再生成日记")
       return
@@ -81,7 +73,7 @@ export default function ChatInterface() {
 
     // 模拟日记内容生成
     const today = new Date()
-    const dateStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日}`
+    const dateStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`
 
     let mood = "平静"
     let activities = "日常的各种事情"
@@ -92,46 +84,30 @@ export default function ChatInterface() {
       const content = message.content.toLowerCase()
       if (content.includes("开心") || content.includes("快乐")) mood = "很开心"
       if (content.includes("工作") || content.includes("学习")) activities = "工作和学习"
-      if (content.includes("运动") || content.includes("锻炼")) activities = "运动锻炼"
-      if (content.includes("朋友") || content.includes("聚会")) activities = "与朋友聚会"
     }
 
     const diaryContent = `今天是${dateStr}，我今天感觉${mood}，我今天完成了${activities}。
 
-回想起来，每一个平凡的日子都值得被记录和珍惜。感谢今天的经历，让我更加了解自己。`
+回想起来，每一个平凡的日子都值得被记录和珍惜。`
 
     setGeneratedDiary(diaryContent)
     setShowDiaryModal(true)
   }
 
-  const handleDiarySaved = async (content: string, template: string, images: string[], highlight: string) => {
-    try {
-      const today = new Date()
-      const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
-
-      const { error } = await addDiary({
-        content,
-        date: dateStr,
-        template,
-        images,
-        highlight,
-      })
-
-      if (error) {
-        alert("保存日记失败，请重试")
-      } else {
-        alert("日记保存成功！")
-        setShowDiaryModal(false)
-      }
-    } catch (error) {
-      console.error("保存日记失败:", error)
-      alert("保存失败，请重试")
-    }
+  const handleDiarySaved = () => {
+    // 模拟日记保存后的操作，例如刷新日历
+    console.log("日记已保存，可以刷新日历")
+    // 这里可以触发父组件（Home）的日历刷新，但在这个纯前端展示中，我们只打印日志
   }
 
   return (
     <>
       <div className="flex flex-col h-full">
+        {/* Header */}
+        <div className="p-4 bg-white border-b border-amber-100">
+          <h1 className="text-xl font-semibold text-stone-700 text-center">心语迹</h1>
+        </div>
+
         {/* Chat Messages Area */}
         <div className="flex-grow p-4 space-y-4 overflow-y-auto">
           {messages.length === 0 && (

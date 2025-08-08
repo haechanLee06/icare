@@ -1,20 +1,54 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import DiaryDetailModal from "./diary-detail-modal"
 import DiaryEditModal from "./diary-edit-modal"
-import { useDiaries } from "@/hooks/useDiaries"
-import type { Diary } from "@/lib/supabase"
+
+interface Diary {
+  id: string
+  content: string
+  date: string // YYYY-MM-DD format
+  images: string[]
+  template: string
+  highlight: string
+  createdAt: string
+}
+
+// 模拟数据库存储
+let mockDiaries: Diary[] = [
+  {
+    id: "1",
+    content: "今天天气很好，去公园散步了，心情很放松。",
+    date: "2025-08-01",
+    images: [],
+    template: "nature",
+    highlight: "心情很放松",
+    createdAt: "2025-08-01T10:00:00Z",
+  },
+  {
+    id: "2",
+    content: "完成了一个重要的工作项目，虽然过程有些辛苦，但看到成果的瞬间，一切都值了。",
+    date: "2025-08-05", // 假设今天
+    images: [],
+    template: "warm",
+    highlight: "看到成果的瞬间，一切都值了",
+    createdAt: "2025-08-05T18:30:00Z",
+  },
+]
 
 export default function CalendarInterface() {
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [diaries, setDiaries] = useState<Diary[]>(mockDiaries) // 使用模拟数据
   const [selectedDiary, setSelectedDiary] = useState<Diary | null>(null)
   const [editingDiary, setEditingDiary] = useState<Diary | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
-  
-  const { diaries, loading, addDiary, updateDiary } = useDiaries()
+
+  // 模拟获取日记，直接返回本地数据
+  const fetchDiaries = () => {
+    setDiaries([...mockDiaries])
+  }
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear()
@@ -67,152 +101,138 @@ export default function CalendarInterface() {
     setSelectedDiary(null) // 关闭详情模态框
   }
 
-  const handleDiarySaved = async (updatedDiaryContent: string, template: string, images: string[], highlight: string) => {
+  const handleDiarySaved = (updatedDiaryContent: string, template: string, images: string[], highlight: string) => {
     const today = new Date()
     const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
 
-    try {
-      if (editingDiary) {
-        // 更新现有日记
-        const { error } = await updateDiary(editingDiary.id, {
-          content: updatedDiaryContent,
-          template,
-          images,
-          highlight,
-        })
-        
-        if (error) {
-          alert("更新日记失败，请重试")
-          return
-        }
-      } else {
-        // 添加新日记
-        const { error } = await addDiary({
-          content: updatedDiaryContent,
-          date: dateStr,
-          template,
-          images,
-          highlight,
-        })
-        
-        if (error) {
-          alert("保存日记失败，请重试")
-          return
-        }
+    if (editingDiary) {
+      // 更新现有日记
+      mockDiaries = mockDiaries.map((d) =>
+        d.id === editingDiary.id
+          ? { ...d, content: updatedDiaryContent, template, images, highlight, updatedAt: new Date().toISOString() }
+          : d,
+      )
+    } else {
+      // 添加新日记
+      const newDiary: Diary = {
+        id: Date.now().toString(),
+        content: updatedDiaryContent,
+        date: dateStr,
+        images,
+        template,
+        highlight,
+        createdAt: new Date().toISOString(),
       }
-      
-      setShowEditModal(false)
-      setEditingDiary(null)
-    } catch (error) {
-      console.error("保存日记失败:", error)
-      alert("保存失败，请重试")
+      mockDiaries.push(newDiary)
     }
+    fetchDiaries() // 刷新日记列表
+    setShowEditModal(false)
+    setEditingDiary(null)
   }
 
   const days = getDaysInMonth(currentDate)
   const weekDays = ["日", "一", "二", "三", "四", "五", "六"]
   const monthNames = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-400 mx-auto"></div>
-          <p className="mt-2 text-stone-600">加载中...</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <>
-      <div className="flex flex-col h-full">
-        {/* 日历头部 */}
-        <div className="flex items-center justify-between p-4 bg-white border-b border-amber-100">
-          <Button
-            onClick={() => navigateMonth("prev")}
-            variant="ghost"
-            size="sm"
-            className="text-stone-500 hover:text-stone-700"
-          >
-            <ChevronLeft size={20} />
-          </Button>
+      <div className="flex flex-col h-full bg-amber-50">
+        {/* 头部 */}
+        <div className="p-6 bg-white shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <Button
+              onClick={() => navigateMonth("prev")}
+              className="p-2 bg-transparent hover:bg-amber-100 text-stone-600 rounded-full"
+            >
+              <ChevronLeft size={20} />
+            </Button>
 
-          <h2 className="text-lg font-semibold text-stone-700">
-            {currentDate.getFullYear()}年 {monthNames[currentDate.getMonth()]}
-          </h2>
+            <h1 className="text-xl font-bold text-stone-700">
+              {currentDate.getFullYear()}年 {monthNames[currentDate.getMonth()]}
+            </h1>
 
-          <Button
-            onClick={() => navigateMonth("next")}
-            variant="ghost"
-            size="sm"
-            className="text-stone-500 hover:text-stone-700"
-          >
-            <ChevronRight size={20} />
-          </Button>
-        </div>
+            <Button
+              onClick={() => navigateMonth("next")}
+              className="p-2 bg-transparent hover:bg-amber-100 text-stone-600 rounded-full"
+            >
+              <ChevronRight size={20} />
+            </Button>
+          </div>
 
-        {/* 星期标题 */}
-        <div className="grid grid-cols-7 bg-white border-b border-amber-100">
-          {weekDays.map((day) => (
-            <div key={day} className="p-3 text-center text-sm font-medium text-stone-600">
-              {day}
-            </div>
-          ))}
+          {/* 星期表头 */}
+          <div className="grid grid-cols-7 gap-2 text-center mb-2">
+            {weekDays.map((day) => (
+              <div key={day} className="text-xs text-stone-500 font-medium py-2">
+                {day}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* 日历网格 */}
-        <div className="flex-grow grid grid-cols-7 bg-white">
-          {days.map((day, index) => (
-            <div
-              key={index}
-              className={`min-h-[80px] p-2 border-r border-b border-amber-100 ${
-                day === null ? "bg-gray-50" : "hover:bg-amber-50 cursor-pointer"
-              }`}
-              onClick={() => {
-                if (day !== null) {
-                  const diary = getDiary(day)
-                  if (diary) {
-                    setSelectedDiary(diary)
-                  } else {
-                    // 创建新日记
-                    setEditingDiary(null)
-                    setShowEditModal(true)
-                  }
+        <div className="flex-grow p-6 pt-0">
+          <div className="grid grid-cols-7 gap-2">
+            {days.map((day, index) => (
+              <div key={index} className="aspect-square">
+                {day && (
+                  <button
+                    onClick={() => {
+                      const diary = getDiary(day)
+                      if (diary) {
+                        setSelectedDiary(diary)
+                      }
+                    }}
+                    className={`w-full h-full relative p-2 rounded-lg transition-colors ${
+                      hasDiary(day)
+                        ? "bg-orange-100 hover:bg-orange-200 text-orange-800"
+                        : "hover:bg-amber-100 text-stone-600"
+                    }`}
+                  >
+                    <span className="text-sm font-medium">{day}</span>
+                    {hasDiary(day) && (
+                      <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-orange-400 rounded-full"></div>
+                    )}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 统计信息 */}
+        <div className="p-6 bg-white border-t border-amber-100">
+          <div className="text-center text-stone-600">
+            <p className="text-sm">
+              本月已记录{" "}
+              <span className="font-bold text-orange-500">
+                {
+                  diaries.filter((d) =>
+                    d.date.startsWith(
+                      `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}`,
+                    ),
+                  ).length
                 }
-              }}
-            >
-              {day && (
-                <>
-                  <div className="text-sm font-medium text-stone-700 mb-1">{day}</div>
-                  {hasDiary(day) && (
-                    <div className="w-2 h-2 bg-orange-400 rounded-full mx-auto"></div>
-                  )}
-                </>
-              )}
-            </div>
-          ))}
+              </span>{" "}
+              天
+            </p>
+          </div>
         </div>
       </div>
 
       {/* 日记详情模态框 */}
-      {selectedDiary && (
-        <DiaryDetailModal
-          diary={selectedDiary}
-          onClose={() => setSelectedDiary(null)}
-          onEdit={() => handleEditDiary(selectedDiary)}
-        />
-      )}
+      <DiaryDetailModal
+        diary={selectedDiary}
+        isOpen={!!selectedDiary}
+        onClose={() => setSelectedDiary(null)}
+        onEdit={handleEditDiary}
+      />
 
       {/* 日记编辑模态框 */}
       <DiaryEditModal
         isOpen={showEditModal}
-        onClose={() => {
-          setShowEditModal(false)
-          setEditingDiary(null)
-        }}
+        onClose={() => setShowEditModal(false)}
         initialContent={editingDiary?.content || ""}
-        onSave={handleDiarySaved}
+        onSave={(content, template, images, highlight) => handleDiarySaved(content, template, images, highlight)}
       />
     </>
   )
