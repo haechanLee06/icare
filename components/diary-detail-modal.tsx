@@ -2,20 +2,10 @@
 
 import { Button } from "@/components/ui/button"
 import { X, Quote, Edit } from "lucide-react"
-
-interface Diary {
-  id: string
-  content: string
-  date: string
-  images: string[]
-  template: string
-  highlight: string
-  createdAt: string
-}
+import type { Diary } from "@/lib/supabase"
 
 interface DiaryDetailModalProps {
-  diary: Diary | null
-  isOpen: boolean
+  diary: Diary
   onClose: () => void
   onEdit?: (diary: Diary) => void
 }
@@ -28,9 +18,7 @@ const templateStyles = {
   dreamy: { bg: "bg-purple-50", text: "text-purple-800", accent: "text-purple-600", border: "border-purple-200" },
 }
 
-export default function DiaryDetailModal({ diary, isOpen, onClose, onEdit }: DiaryDetailModalProps) {
-  if (!isOpen || !diary) return null
-
+export default function DiaryDetailModal({ diary, onClose, onEdit }: DiaryDetailModalProps) {
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
     const weekDays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
@@ -73,7 +61,7 @@ export default function DiaryDetailModal({ diary, isOpen, onClose, onEdit }: Dia
             )}
 
             {/* 图片展示 */}
-            {diary.images.length > 0 && (
+            {diary.images && diary.images.length > 0 && (
               <div className="my-4 grid grid-cols-2 gap-2">
                 {diary.images.map((image, index) => (
                   <img
@@ -97,7 +85,7 @@ export default function DiaryDetailModal({ diary, isOpen, onClose, onEdit }: Dia
 
             {/* 创建时间 */}
             <div className="mt-4 pt-4 border-t border-current border-opacity-20">
-              <p className={`text-xs ${style.accent}`}>创建于 {new Date(diary.createdAt).toLocaleString("zh-CN")}</p>
+              <p className={`text-xs ${style.accent}`}>创建于 {new Date(diary.created_at).toLocaleString("zh-CN")}</p>
             </div>
           </div>
         </div>

@@ -4,22 +4,31 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { MessageCircle, Edit3, Send } from "lucide-react"
+import { MessageCircle, Edit3, Send } from 'lucide-react'
 import DiaryEditModal from "./diary-edit-modal"
+import { useChatMessages } from "@/hooks/useChatMessages"
+import { useDiaries } from "@/hooks/useDiaries"
 
 interface Message {
   id: string
   role: "user" | "assistant"
   content: string
+  created_at: string
 }
 
 export default function ChatInterface() {
   const [input, setInput] = useState("")
-  const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [showDiaryModal, setShowDiaryModal] = useState(false)
   const [generatedDiary, setGeneratedDiary] = useState("")
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  
+  // 新增状态用于处理AI流式响应
+  const [streamingAiContent, setStreamingAiContent] = useState<string>("");
+  // const [streamingAiMessageId, setStreamingAiMessageId] = useState<string | null>(null); // 暂时不需要这个ID，因为我们只显示一个流式消息
+
+  const { messages, addMessage } = useChatMessages() // `messages` 和 `addMessage` 来自 Hook
+  const { addDiary } = useDiaries()
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -27,37 +36,58 @@ export default function ChatInterface() {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [messages, streamingAiContent]) // 监听 messages 和 streamingAiContent 变化以滚动
 
+  // 判断是否应该显示"生成今日日记"按钮
   const shouldShowGenerate = messages.filter((msg) => msg.role === "user").length >= 3
 
   const handleSendMessage = async (userMessage: string) => {
-    const newUserMessage: Message = { id: Date.now().toString(), role: "user", content: userMessage }
-    setMessages((prevMessages) => [...prevMessages, newUserMessage])
-    setInput("")
-    setIsLoading(true)
+    if (!userMessage.trim()) return;
 
-    // 模拟AI回复
-    setTimeout(() => {
-      const userMessageCount = messages.filter((msg) => msg.role === "user").length + 1 // +1 for current message
-      let aiResponse = ""
+    setIsLoading(true);
+    setStreamingAiContent(""); // 清空之前的流式内容
 
-      if (userMessageCount === 1) {
-        aiResponse = "你好！今天做了些什么事呀？"
-      } else if (userMessageCount === 2) {
-        aiResponse = "听起来很棒呢！那你今天的心情如何？"
-      } else if (userMessageCount === 3) {
-        aiResponse =
-          "我能感受到你的心情。每一天的感受都很珍贵，要不要把今天的经历记录下来呢？你可以点击下面的按钮生成今日日记哦～"
-      } else {
-        aiResponse = "我一直在这里陪伴你，有什么想聊的都可以告诉我哦～"
+    // 1. 添加用户消息到 Supabase (通过 Hook)
+    await addMessage("user", userMessage.trim());
+    setInput("");
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // 将当前所有消息（包括刚刚添加的用户消息）发送给后端，用于AI上下文
+        // 确保只发送 role 和 content
+        body: JSON.stringify({ messages: messages.map(msg => ({ role: msg.role, content: msg.content })) }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
 
-      const newAiMessage: Message = { id: (Date.now() + 1).toString(), role: "assistant", content: aiResponse }
-      setMessages((prevMessages) => [...prevMessages, newAiMessage])
-      setIsLoading(false)
-    }, 1000) // 模拟AI思考时间
-  }
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let receivedText = '';
+
+      while (true) {
+        const { done, value } = await reader?.read()!;
+        if (done) break;
+        receivedText += decoder.decode(value, { stream: true });
+        setStreamingAiContent(receivedText); // 实时更新流式内容
+      }
+
+      // 2. AI 响应完成后，将完整的 AI 消息保存到 Supabase (通过 Hook)
+      await addMessage("assistant", receivedText);
+
+    } catch (error) {
+      console.error("发送消息失败:", error);
+      setStreamingAiContent("抱歉，AI 暂时无法响应，请稍后再试。"); // 显示错误信息
+      alert("发送消息失败，请检查网络或稍后再试。");
+    } finally {
+      setIsLoading(false);
+      setStreamingAiContent(""); // 清空流式内容
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -65,39 +95,60 @@ export default function ChatInterface() {
     handleSendMessage(input.trim())
   }
 
-  const handleGenerateDiary = () => {
+  const handleGenerateDiary = async () => {
     if (messages.length === 0) {
       alert("请先与AI聊天，然后再生成日记")
       return
     }
 
-    // 模拟日记内容生成
-    const today = new Date()
-    const dateStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`
+    setIsLoading(true); // 生成日记时也显示加载状态
+    try {
+      const response = await fetch("/api/generate-diary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // 将完整的聊天历史发送给后端
+        body: JSON.stringify({ chatHistory: messages.map(msg => ({ role: msg.role, content: msg.content })) }),
+      })
 
-    let mood = "平静"
-    let activities = "日常的各种事情"
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error || 'Unknown error'}`);
+      }
 
-    // 简单模拟从聊天记录中提取信息
-    const userMessages = messages.filter((msg) => msg.role === "user")
-    for (const message of userMessages) {
-      const content = message.content.toLowerCase()
-      if (content.includes("开心") || content.includes("快乐")) mood = "很开心"
-      if (content.includes("工作") || content.includes("学习")) activities = "工作和学习"
+      const { diary } = await response.json()
+      setGeneratedDiary(diary)
+      setShowDiaryModal(true)
+    } catch (error) {
+      console.error("生成日记失败:", error)
+      alert("生成日记失败，请稍后再试。")
+    } finally {
+      setIsLoading(false);
     }
-
-    const diaryContent = `今天是${dateStr}，我今天感觉${mood}，我今天完成了${activities}。
-
-回想起来，每一个平凡的日子都值得被记录和珍惜。`
-
-    setGeneratedDiary(diaryContent)
-    setShowDiaryModal(true)
   }
 
-  const handleDiarySaved = () => {
-    // 模拟日记保存后的操作，例如刷新日历
-    console.log("日记已保存，可以刷新日历")
-    // 这里可以触发父组件（Home）的日历刷新，但在这个纯前端展示中，我们只打印日志
+  const handleDiarySaved = async (content: string, template: string, images: string[], highlight: string) => {
+    try {
+      const today = new Date()
+      const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
+
+      const { error } = await addDiary({
+        content,
+        date: dateStr,
+        template,
+        images,
+        highlight,
+      })
+
+      if (error) {
+        alert("保存日记失败，请重试")
+      } else {
+        alert("日记保存成功！")
+        setShowDiaryModal(false)
+      }
+    } catch (error) {
+      console.error("保存日记失败:", error)
+      alert("保存失败，请重试")
+    }
   }
 
   return (
@@ -110,7 +161,7 @@ export default function ChatInterface() {
 
         {/* Chat Messages Area */}
         <div className="flex-grow p-4 space-y-4 overflow-y-auto">
-          {messages.length === 0 && (
+          {messages.length === 0 && !isLoading && ( // 只有在没有消息且不加载时才显示初始提示
             <div className="flex flex-col items-center justify-center h-full text-center">
               <MessageCircle className="w-16 h-16 mb-4 text-orange-300" />
               <h2 className="mb-2 text-lg font-medium text-stone-700">晚上好 ✨</h2>
@@ -133,7 +184,17 @@ export default function ChatInterface() {
             </div>
           ))}
 
-          {isLoading && (
+          {/* 显示流式 AI 内容 */}
+          {isLoading && streamingAiContent && (
+            <div className="flex justify-start">
+              <div className="max-w-xs p-3 text-stone-700 bg-white rounded-t-2xl rounded-br-2xl shadow-sm">
+                <p className="text-sm leading-relaxed">{streamingAiContent}</p>
+              </div>
+            </div>
+          )}
+
+          {/* 原始的加载动画，只有在加载中且还没有流式内容时显示 */}
+          {isLoading && !streamingAiContent && (
             <div className="flex justify-start">
               <div className="max-w-xs p-3 text-stone-700 bg-white rounded-t-2xl rounded-br-2xl shadow-sm">
                 <div className="flex space-x-1">
@@ -161,6 +222,7 @@ export default function ChatInterface() {
                 onClick={handleGenerateDiary}
                 className="w-full bg-amber-200 hover:bg-amber-300 text-stone-700 border-none"
                 variant="outline"
+                disabled={isLoading} // 生成日记时禁用按钮
               >
                 <Edit3 className="w-4 h-4 mr-2" />
                 生成今日日记
