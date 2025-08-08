@@ -4,16 +4,7 @@ import { useState, useEffect } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import DiaryDetailModal from "./diary-detail-modal"
-
-interface Diary {
-  id: string
-  content: string
-  date: string
-  images: string[]
-  template: string
-  highlight: string
-  createdAt: string
-}
+import type { Diary } from "@/lib/supabase"
 
 export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -169,7 +160,12 @@ export default function CalendarPage() {
       </div>
 
       {/* 日记详情模态框 */}
-      <DiaryDetailModal diary={selectedDiary} isOpen={!!selectedDiary} onClose={() => setSelectedDiary(null)} />
+      {selectedDiary && (
+        <DiaryDetailModal 
+          diary={selectedDiary} 
+          onClose={() => setSelectedDiary(null)} 
+        />
+      )}
     </>
   )
 }
