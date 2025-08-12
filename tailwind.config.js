@@ -67,10 +67,43 @@ module.exports = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        bounce: {
+          "0%, 20%, 53%, 80%, 100%": {
+            transform: "translate3d(0,0,0)",
+          },
+          "40%, 43%": {
+            transform: "translate3d(0, -30px, 0)",
+          },
+          "70%": {
+            transform: "translate3d(0, -15px, 0)",
+          },
+          "90%": {
+            transform: "translate3d(0, -4px, 0)",
+          },
+        },
+        spin: {
+          from: {
+            transform: "rotate(0deg)",
+          },
+          to: {
+            transform: "rotate(360deg)",
+          },
+        },
+        pulse: {
+          "0%, 100%": {
+            opacity: "1",
+          },
+          "50%": {
+            opacity: ".5",
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        bounce: "bounce 1s infinite",
+        spin: "spin 1s linear infinite",
+        pulse: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
       },
     },
   },
