@@ -1,20 +1,19 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { useState } from "react"
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import DiaryDetailModal from "./diary-detail-modal"
-import DiaryEditModal from "./diary-edit-modal"
 import { useDiaries } from "@/hooks/useDiaries"
+import { useRouter } from "next/navigation"
 import type { Diary } from "@/lib/supabase"
 
 export default function CalendarInterface() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDiary, setSelectedDiary] = useState<Diary | null>(null)
-  const [editingDiary, setEditingDiary] = useState<Diary | null>(null)
-  const [showEditModal, setShowEditModal] = useState(false)
-  
-  const { diaries, loading, addDiary, updateDiary } = useDiaries()
+  const router = useRouter()
+
+  const { diaries, loading } = useDiaries()
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear()
@@ -61,52 +60,21 @@ export default function CalendarInterface() {
     })
   }
 
-  const handleEditDiary = (diary: Diary) => {
-    setEditingDiary(diary)
-    setShowEditModal(true)
-    setSelectedDiary(null) // 关闭详情模态框
+  const handleDayClick = (day: number) => {
+    const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+    const diary = getDiary(day)
+
+    if (diary) {
+      setSelectedDiary(diary)
+    } else {
+      // 创建新日记，跳转到编辑页面
+      router.push(`/diary/edit?date=${dateStr}`)
+    }
   }
 
-  const handleDiarySaved = async (updatedDiaryContent: string, template: string, images: string[], highlight: string) => {
-    const today = new Date()
-    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
-
-    try {
-      if (editingDiary) {
-        // 更新现有日记
-        const { error } = await updateDiary(editingDiary.id, {
-          content: updatedDiaryContent,
-          template,
-          images,
-          highlight,
-        })
-        
-        if (error) {
-          alert("更新日记失败，请重试")
-          return
-        }
-      } else {
-        // 添加新日记
-        const { error } = await addDiary({
-          content: updatedDiaryContent,
-          date: dateStr,
-          template,
-          images,
-          highlight,
-        })
-        
-        if (error) {
-          alert("保存日记失败，请重试")
-          return
-        }
-      }
-      
-      setShowEditModal(false)
-      setEditingDiary(null)
-    } catch (error) {
-      console.error("保存日记失败:", error)
-      alert("保存失败，请重试")
-    }
+  const handleEditDiary = (diary: Diary) => {
+    router.push(`/diary/edit?date=${diary.date}&content=${encodeURIComponent(diary.content)}`)
+    setSelectedDiary(null)
   }
 
   const days = getDaysInMonth(currentDate)
@@ -126,7 +94,7 @@ export default function CalendarInterface() {
 
   return (
     <>
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full bg-amber-50">
         {/* 日历头部 */}
         <div className="flex items-center justify-between p-4 bg-white border-b border-amber-100">
           <Button
@@ -166,32 +134,48 @@ export default function CalendarInterface() {
           {days.map((day, index) => (
             <div
               key={index}
-              className={`min-h-[80px] p-2 border-r border-b border-amber-100 ${
+              className={`min-h-[100px] p-2 border-r border-b border-amber-100 ${
                 day === null ? "bg-gray-50" : "hover:bg-amber-50 cursor-pointer"
               }`}
-              onClick={() => {
-                if (day !== null) {
-                  const diary = getDiary(day)
-                  if (diary) {
-                    setSelectedDiary(diary)
-                  } else {
-                    // 创建新日记
-                    setEditingDiary(null)
-                    setShowEditModal(true)
-                  }
-                }
-              }}
+              onClick={() => day !== null && handleDayClick(day)}
             >
               {day && (
-                <>
-                  <div className="text-sm font-medium text-stone-700 mb-1">{day}</div>
-                  {hasDiary(day) && (
-                    <div className="w-2 h-2 bg-orange-400 rounded-full mx-auto"></div>
+                <div className="h-full flex flex-col">
+                  <div className="text-sm font-medium text-stone-700 mb-2">{day}</div>
+                  {hasDiary(day) ? (
+                    <div className="flex-1 bg-orange-100 rounded-lg p-2 border border-orange-200">
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="w-3 h-3 bg-orange-400 rounded-full"></div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex-1 border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center hover:border-orange-300 transition-colors">
+                      <Plus className="w-4 h-4 text-gray-400" />
+                    </div>
                   )}
-                </>
+                </div>
               )}
             </div>
           ))}
+        </div>
+
+        {/* 统计信息 */}
+        <div className="p-4 bg-white border-t border-amber-100">
+          <div className="text-center text-stone-600">
+            <p className="text-sm">
+              本月已记录{" "}
+              <span className="font-bold text-orange-500">
+                {
+                  diaries.filter((d) =>
+                    d.date.startsWith(
+                      `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}`,
+                    ),
+                  ).length
+                }
+              </span>{" "}
+              天日记
+            </p>
+          </div>
         </div>
       </div>
 
@@ -203,17 +187,6 @@ export default function CalendarInterface() {
           onEdit={() => handleEditDiary(selectedDiary)}
         />
       )}
-
-      {/* 日记编辑模态框 */}
-      <DiaryEditModal
-        isOpen={showEditModal}
-        onClose={() => {
-          setShowEditModal(false)
-          setEditingDiary(null)
-        }}
-        initialContent={editingDiary?.content || ""}
-        onSave={handleDiarySaved}
-      />
     </>
   )
 }
